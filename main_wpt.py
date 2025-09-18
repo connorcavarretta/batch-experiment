@@ -12,6 +12,9 @@ from torchvision.transforms import InterpolationMode
 import torchvision.transforms.functional as TF
 from torch.utils.tensorboard import SummaryWriter
 
+from argparse import BooleanOptionalAction
+from metrics_utils import seed_everything
+
 from accelerate import Accelerator
 from transformers import (
     AutoConfig,
@@ -182,7 +185,14 @@ def main():
     ap.add_argument("--wpt_wavelet", type=str, default="db2", help="e.g., db2, coif1, sym4")
     ap.add_argument("--wpt_output",  type=str, default="ll", choices=["ll","concat"],
                     help="ll: 3 channels; concat: 3*(4**level) channels")
+    
+    # Addtional Options
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--use_wpt", default=True, action=BooleanOptionalAction,
+                    help="Enable/disable Wavelet Packet Transform in the dataloader")
+
     args = ap.parse_args()
+    seed_everything(args.seed)
 
     # Make Directories
     Path(args.out).mkdir(parents=True, exist_ok=True)
@@ -194,14 +204,31 @@ def main():
     writer = SummaryWriter(tb_dir) if accelerator.is_main_process else None
 
     # Build transforms (no resize back after WPT)
-    train_tfms, val_tfms = build_transforms(
-        args.img_size,
-        randaug_mag=args.randaug_mag,
-        re_prob=args.re_prob,
-        wpt_wavelet=args.wpt_wavelet,
-        wpt_level=args.wpt_level,
-        wpt_output=args.wpt_output,
-    )
+    if args.use_wpt:
+        train_tfms, val_tfms = build_transforms(
+            args.img_size,
+            randaug_mag=args.randaug_mag,
+            re_prob=args.re_prob,
+            wpt_wavelet=args.wpt_wavelet,
+            wpt_level=args.wpt_level,
+            wpt_output=args.wpt_output,
+        )
+    else:
+        # Same pipeline minus WPT; keep PerImageStandardize so data scale is comparable
+        train_tfms = transforms.Compose([
+            transforms.RandomResizedCrop(args.img_size, interpolation=InterpolationMode.BICUBIC),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandAugment(num_ops=2, magnitude=args.randaug_mag),
+            transforms.ToTensor(),
+            transforms.RandomErasing(p=args.re_prob, inplace=True),
+            PerImageStandardize(),
+        ])
+        val_tfms = transforms.Compose([
+            transforms.Resize(int(args.img_size * 256 / 224), interpolation=InterpolationMode.BICUBIC),
+            transforms.CenterCrop(args.img_size),
+            transforms.ToTensor(),
+            PerImageStandardize(),
+        ])
 
     train_ds = datasets.ImageFolder(os.path.join(args.data, "train"), transform=train_tfms)
     val_ds   = datasets.ImageFolder(os.path.join(args.data, "val"),   transform=val_tfms)
@@ -217,7 +244,10 @@ def main():
     )
 
     # Determine channels after WPT
-    in_chans_after_wpt = 3 if args.wpt_output == "ll" else 3 * (4 ** args.wpt_level)
+    if args.use_wpt:
+        in_chans_after_wpt = 3 if args.wpt_output == "ll" else 3 * (4 ** args.wpt_level)
+    else:
+        in_chans_after_wpt = 3
 
     # Instantiate Model
     from convnext_modified import ConvNeXt
