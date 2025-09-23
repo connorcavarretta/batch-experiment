@@ -1,5 +1,5 @@
 # main_wpt_convnext_adapt.py
-import os, math, argparse, copy, time
+import os, math, argparse, copy, time, json
 from pathlib import Path
 from typing import Literal
 
@@ -149,6 +149,19 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / target.size(0)).item())
     return res
 
+def _count_params_m(model) -> float:
+    return sum(p.numel() for p in model.parameters() if p.requires_grad) / 1e6
+
+def _try_flops_g(model, in_shape, device="cpu"):
+    try:
+        from thop import profile
+        import torch
+        dummy = torch.randn(*in_shape, device=device)
+        macs, _ = profile(model.to(device), inputs=(dummy,),verbose=False)
+        return macs / 1e9
+    except Exception:
+        return None
+
 # ==============================
 # Main
 # ==============================
@@ -188,8 +201,6 @@ def main():
     
     # Addtional Options
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--use_wpt", default=True, action=BooleanOptionalAction,
-                    help="Enable/disable Wavelet Packet Transform in the dataloader")
 
     args = ap.parse_args()
     seed_everything(args.seed)
@@ -204,31 +215,14 @@ def main():
     writer = SummaryWriter(tb_dir) if accelerator.is_main_process else None
 
     # Build transforms (no resize back after WPT)
-    if args.use_wpt:
-        train_tfms, val_tfms = build_transforms(
-            args.img_size,
-            randaug_mag=args.randaug_mag,
-            re_prob=args.re_prob,
-            wpt_wavelet=args.wpt_wavelet,
-            wpt_level=args.wpt_level,
-            wpt_output=args.wpt_output,
-        )
-    else:
-        # Same pipeline minus WPT; keep PerImageStandardize so data scale is comparable
-        train_tfms = transforms.Compose([
-            transforms.RandomResizedCrop(args.img_size, interpolation=InterpolationMode.BICUBIC),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandAugment(num_ops=2, magnitude=args.randaug_mag),
-            transforms.ToTensor(),
-            transforms.RandomErasing(p=args.re_prob, inplace=True),
-            PerImageStandardize(),
-        ])
-        val_tfms = transforms.Compose([
-            transforms.Resize(int(args.img_size * 256 / 224), interpolation=InterpolationMode.BICUBIC),
-            transforms.CenterCrop(args.img_size),
-            transforms.ToTensor(),
-            PerImageStandardize(),
-        ])
+    train_tfms, val_tfms = build_transforms(
+        args.img_size,
+        randaug_mag=args.randaug_mag,
+        re_prob=args.re_prob,
+        wpt_wavelet=args.wpt_wavelet,
+        wpt_level=args.wpt_level,
+        wpt_output=args.wpt_output,
+    )
 
     train_ds = datasets.ImageFolder(os.path.join(args.data, "train"), transform=train_tfms)
     val_ds   = datasets.ImageFolder(os.path.join(args.data, "val"),   transform=val_tfms)
@@ -244,15 +238,33 @@ def main():
     )
 
     # Determine channels after WPT
-    if args.use_wpt:
-        in_chans_after_wpt = 3 if args.wpt_output == "ll" else 3 * (4 ** args.wpt_level)
-    else:
-        in_chans_after_wpt = 3
+    in_chans_after_wpt = 3 if args.wpt_output == "ll" else 3 * (4 ** args.wpt_level)
+
 
     # Instantiate Model
     from convnext_modified import ConvNeXt
     model = ConvNeXt(in_chans=in_chans_after_wpt)
    
+    # Flop and Param count
+    if args.wpt_output == "ll":
+        C = 3
+        H = W = args.img_size // (2**args.wpt_level)
+    else: # concat
+        C = 3 * (4**args.wpt_level)
+        H = W = args.img_size // (2**args.wpt_level)
+
+    params_m = _count_params_m(model)
+    flops_g = _try_flops_g(model, in_shape=(1,C,H,W), device="cpu")
+
+    # Save a small JSON file
+    stats = {
+        "params_m": round(params_m, 4),
+        "flops_g": None if flops_g is None else round(float(flops_g), 4),
+        "profile_input_shape": [1, C, H, W],
+    }
+    Path(args.out).mkdir(parents=True, exist_ok=True)
+    with open(os.path.join(args.out, "model_stats.json"), "w") as f:
+        json.dump(stats, f, indent=2)
 
     # Mixup | Cutmix
     mixup_fn = Mixup(

@@ -18,3 +18,4 @@ scipy
 numpy
 pandas
 tensorboard
+thop

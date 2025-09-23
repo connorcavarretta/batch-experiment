@@ -1,49 +1,36 @@
 [
   {
-    "name": "control_none",
-    "use_wpt": false,
-    "wpt_wavelet": null,
-    "wpt_level": 0,
-    "wpt_output": "ll"
-  },
-  {
     "name": "db2_L2_ll",
-    "use_wpt": true,
     "wpt_wavelet": "db2",
     "wpt_level": 2,
     "wpt_output": "ll"
   },
   {
     "name": "db4_L2_ll",
-    "use_wpt": true,
     "wpt_wavelet": "db4",
     "wpt_level": 2,
     "wpt_output": "ll"
   },
   {
     "name": "coif1_L2_ll",
-    "use_wpt": true,
     "wpt_wavelet": "coif1",
     "wpt_level": 2,
     "wpt_output": "ll"
   },
   {
     "name": "sym4_L2_ll",
-    "use_wpt": true,
     "wpt_wavelet": "sym4",
     "wpt_level": 2,
     "wpt_output": "ll"
   },
   {
     "name": "bior4.4_L2_ll",
-    "use_wpt": true,
     "wpt_wavelet": "bior4.4",
     "wpt_level": 2,
     "wpt_output": "ll"
   },
   {
     "name": "haar_L2_ll",
-    "use_wpt": true,
     "wpt_wavelet": "haar",
     "wpt_level": 2,
     "wpt_output": "ll"

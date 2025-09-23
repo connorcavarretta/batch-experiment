@@ -4,9 +4,10 @@ from metrics_utils import append_row, write_json
 
 THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def build_cmd(python_exe, main_py, data_dir, out_dir, wavelet_cfg, common):
+def build_cmd(main_py, data_dir, out_dir, wavelet_cfg, common):
+    launch = f"accelerate launch --multi-gpu --num_processes=3"
     parts = [
-        shlex.quote(python_exe),
+        launch,
         shlex.quote(main_py),
         f"--data {shlex.quote(data_dir)}",
         f"--out {shlex.quote(out_dir)}",
@@ -23,15 +24,11 @@ def build_cmd(python_exe, main_py, data_dir, out_dir, wavelet_cfg, common):
         f"--seed {common['seed']}",
     ]
 
-    if wavelet_cfg.get("use_wpt", True):
-        parts += [
-            "--use_wpt",
-            f"--wpt_level {wavelet_cfg.get('wpt_level', 2)}",
-            f"--wpt_wavelet {shlex.quote(str(wavelet_cfg.get('wpt_wavelet', 'db2')))}",
-            f"--wpt_output {shlex.quote(wavelet_cfg.get('wpt_output','ll'))}",
-        ]
-    else:
-        parts += ["--no-use_wpt"]
+    parts += [
+        f"--wpt_level {wavelet_cfg.get('wpt_level', 2)}",
+        f"--wpt_wavelet {shlex.quote(str(wavelet_cfg.get('wpt_wavelet', 'db2')))}",
+        f"--wpt_output {shlex.quote(wavelet_cfg.get('wpt_output','ll'))}",
+    ]
 
     return " ".join(parts)
 
@@ -42,7 +39,6 @@ def main():
     ap.add_argument("--config", default=os.path.join(THIS_DIR, "wavelets.json"))
     ap.add_argument("--out_root", default=os.path.join(THIS_DIR, "batch_runs"))
     ap.add_argument("--csv", default=os.path.join(THIS_DIR, "results.csv"))
-    ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--epochs", type=int, default=100)
     ap.add_argument("--warmup_epochs", type=int, default=10)
     ap.add_argument("--batch_size", type=int, default=256)
@@ -77,7 +73,7 @@ def main():
         out_dir = os.path.join(run_root, label)
         pathlib.Path(out_dir).mkdir(parents=True, exist_ok=True)
 
-        cmd = build_cmd(args.python, args.main_py, args.data, out_dir, w, common)
+        cmd = build_cmd(args.main_py, args.data, out_dir, w, common)
         print(f"\n=== Running: {label}\n{cmd}\n")
         t0 = time.time()
         ret = subprocess.call(cmd, shell=True)
@@ -85,7 +81,6 @@ def main():
 
         record = {
             "label": label,
-            "use_wpt": bool(w.get("use_wpt", True)),
             "wpt_wavelet": w.get("wpt_wavelet"),
             "wpt_level": w.get("wpt_level"),
             "wpt_output": w.get("wpt_output"),
@@ -108,6 +103,16 @@ def main():
                 record["best_top1_ckpt"] = float(pack2.get("best_top1", float("nan")))
         except Exception as e:
             record["harvest_error"] = str(e)
+
+        stats_json = os.path.join(out_dir, "model_stats.json")
+        try:
+            if os.path.exists(stats_json):
+                with open(stats_json, "r") as f:
+                    stats = json.load(f)
+                record["params_m"]=stats.get("params_m")
+                record["flops_g"] =stats.get("flops_g")
+        except Exception as e:
+            record["stats_error"] = str(e)
 
         append_row(args.csv, record)
         summary_index.append(record)
