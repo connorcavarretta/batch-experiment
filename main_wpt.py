@@ -378,14 +378,14 @@ def main():
             print(f"[VAL] epoch {epoch}: loss={val_loss:.4f} top1={val_top1:.2f} top5={val_top5:.2f} ({epoch_time:.1f}s)")
 
         # Checkpoint
-        ckpt_dir = os.path.join(args.out, f"ckpt_epoch_{epoch:04d}")
-        if accelerator.is_main_process:
-            Path(ckpt_dir).mkdir(parents=True, exist_ok=True)
-        accelerator.save_state(ckpt_dir)
+        # ckpt_dir = os.path.join(args.out, f"ckpt_epoch_{epoch:04d}")
+        # if accelerator.is_main_process:
+        #     Path(ckpt_dir).mkdir(parents=True, exist_ok=True)
+        # accelerator.save_state(ckpt_dir)
 
         if accelerator.is_main_process:
             pack = {"epoch": epoch + 1, "best_top1": max(best_top1, val_top1), "ema_state_dict": ema.state_dict()}
-            torch.save(pack, os.path.join(ckpt_dir, "extras.pt"))
+            #torch.save(pack, os.path.join(ckpt_dir, "extras.pt"))
             torch.save(pack, extras_root)
             if val_top1 > best_top1:
                 best_top1 = val_top1

@@ -1,38 +1,38 @@
 [
   {
-    "name": "db2_L2_ll",
+    "name": "db2_L2_concat",
     "wpt_wavelet": "db2",
     "wpt_level": 2,
-    "wpt_output": "ll"
+    "wpt_output": "concat"
   },
   {
-    "name": "db4_L2_ll",
+    "name": "db4_L2_concat",
     "wpt_wavelet": "db4",
     "wpt_level": 2,
-    "wpt_output": "ll"
+    "wpt_output": "concat"
   },
   {
-    "name": "coif1_L2_ll",
+    "name": "coif1_L2_concat",
     "wpt_wavelet": "coif1",
     "wpt_level": 2,
-    "wpt_output": "ll"
+    "wpt_output": "concat"
   },
   {
-    "name": "sym4_L2_ll",
+    "name": "sym4_L2_concat",
     "wpt_wavelet": "sym4",
     "wpt_level": 2,
-    "wpt_output": "ll"
+    "wpt_output": "concat"
   },
   {
-    "name": "bior4.4_L2_ll",
+    "name": "bior4.4_L2_concat",
     "wpt_wavelet": "bior4.4",
     "wpt_level": 2,
-    "wpt_output": "ll"
+    "wpt_output": "concat"
   },
   {
-    "name": "haar_L2_ll",
+    "name": "haar_L2_concat",
     "wpt_wavelet": "haar",
     "wpt_level": 2,
-    "wpt_output": "ll"
+    "wpt_output": "concat"
   }
 ]
